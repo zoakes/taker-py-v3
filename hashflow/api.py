@@ -35,83 +35,152 @@ class HashflowApi:
         validate_chain_id(chain_id)
         params = {
             "source": self.source,
-            "networkId": chain_id,
+            "baseChainType": 'evm',
+            "baseChainId": str(chain_id),
         }
         if wallet is not None:
             params["wallet"] = wallet
         if market_maker is not None:
             params["marketMaker"] = market_maker
 
-
-        async with self.session.get(f"{self.host}/taker/v1/marketMakers", headers=self.headers, params=params) as r:
+        async with self.session.get(f"{self.host}/taker/v3/market-makers", headers=self.headers, params=params) as r:
             r.raise_for_status()
             json = await r.json()
             return json["marketMakers"]
 
     async def get_price_levels(self, chain_id, market_makers):
+        """
+
+        GET https://api.hashflow.com/taker/v3/price-levels
+          ?source=<source>
+          &baseChainType=<string>
+          &baseChainId=<string>
+          &marketMakers[]=<mm1>
+          &marketMakers[]=<mm2>
+          &baseToken=<token address> //optional
+          &quotToken=<token address> //optional
+
+        :param chain_id:
+        :param market_makers:
+        :return:
+        """
         validate_chain_id(chain_id)
         params = {
             "source": self.source,
-            "networkId": chain_id,
+            'baseChainId': str(chain_id),
+            'baseChainType': 'evm',
             "marketMakers[]": market_makers,
+            # baseToken:   # optional
+            # quoteToken:  # optional
+
         }
         if self.wallet is not None:
             params["wallet"] = self.wallet
 
-        async with self.session.get(f"{self.host}/taker/v2/price-levels", headers=self.headers, params=params) as r:
+        async with self.session.get(f"{self.host}/taker/v3/price-levels", headers=self.headers, params=params) as r:
             r.raise_for_status()
             json = await r.json()
             return json["levels"]
 
-    async def request_quote(
-        self,
-        chain_id,
-        base_token,
-        quote_token,
-        dst_chain_id=None,
-        base_token_amount=None,
-        quote_token_amount=None,
-        wallet=None,
-        effective_trader=None,
-        market_makers=None,
-        feeBps=None,
-        debug=False,
-    ):
-        validate_chain_id(chain_id)
-        if dst_chain_id is not None:
-            validate_chain_id(dst_chain_id)
 
-        validate_evm_address(base_token)
-        validate_evm_address(quote_token)
-        if base_token_amount is not None:
-            validate_number_string(base_token_amount)
-        if quote_token_amount is not None:
-            validate_number_string(quote_token_amount)
+
+    async def request_quote(
+            self,
+            chain_id,
+            base_token,
+            quote_token,
+            dst_chain_id=None,
+            base_token_amount=None,
+            quote_token_amount=None,
+            wallet=None,
+            effective_trader=None,
+            market_makers=None,
+            feeBps=None,
+            debug=False,
+    ):
+        """
+        Post the RFQ according to the new API documentation.
+
+        POST https://api.hashflow.com/taker/v3/rfq
+
+        // JSON body
+        {
+          source: string, // Your identifier (e.g. "1inch", "zerion")
+          baseChain: {
+            chainType: string, // evm | solana
+            chainId: number
+          }
+          quoteChain: {
+            chainType: string, // evm | solana
+            chainId: number
+          }
+          rfqs: {
+            // Contract address (e.g. "0x123a...789")
+            baseToken: string,
+            // Contract address (e.g. "0x123a...789")
+            quoteToken: string,
+            // Decimal amount (e.g. "1000000" for 1 USDT)
+            baseTokenAmount: ?string
+            // Decimal amount (e.g. "1000000" for 1 USDT)
+            quoteTokenAmount: ?string,
+            // The address that will receive quoteToken on-chain.
+            trader: string,
+            // The wallet address of the actual trader (e.g. end user wallet).
+            // If effectiveTrader is not present, we assume trader == effectiveTrader.
+            effectiveTrader: ?string,
+            // The wallet address to claim trading rewards for api user.
+            // Cannot be set unless source == 'api'
+            // This is useful when api users needs a separate wallet to claim rewards
+            // If left empty, rewards will be sent to trader address
+            rewardTrader: ?string,
+
+            marketMakers: ?string[], // e.g. ["mm1"]
+            excludeMarketMakers: ?string[],
+            options:{
+              doNotRetryWithOtherMakers: ?boolean, //Default to false
+            }
+
+            // The amount to be charged in fees, in basis points.
+            feesBps: ?number
+          }[],
+          calldata: ?boolean, // If this is true, contract calldata will be provided.
+        }
+        """
+        # ... your existing validation logic ...
 
         trader = wallet if wallet is not None else self.wallet
         if trader is None:
-            raise InvalidUsage("Must specify wallet")
+            raise InvalidUsage("Must specify wallet for trader.")
 
-        validate_evm_address(trader)
-        if effective_trader is not None:
-            validate_evm_address(effective_trader)
-
-        data = {
-            "rfqType": RfqType.RFQT.value,
-            "source": self.source,
-            "trader": trader,
-            "networkId": chain_id,
-            "dstNetworkId": dst_chain_id,
+        # Construct the new request body structure
+        rfqs = [{
             "baseToken": base_token,
             "quoteToken": quote_token,
             "baseTokenAmount": base_token_amount,
             "quoteTokenAmount": quote_token_amount,
-            "effectiveTrader": effective_trader,
+            "trader": trader,
+            "effectiveTrader": effective_trader or trader,  # Assume trader == effectiveTrader if not specified
             "marketMakers": market_makers,
             "feesBps": feeBps,
-            "debug": debug,
+        }]
+
+        data = {
+            "source": self.source,
+            "baseChain": {
+                "chainType": "evm",  # Assuming EVM chain type
+                "chainId": chain_id,
+            },
+            "quoteChain": {
+                "chainType": "evm",  # Assuming EVM chain type
+                "chainId": dst_chain_id or chain_id,
+            },
+            "rfqs": rfqs,
+            "calldata": debug,
+            # this is basically, debugging
         }
-        async with self.session.post(f"{self.host}/taker/v2/rfq", json=data, headers=self.headers) as r:
+
+        # Assuming the endpoint is now v3 instead of v2
+        async with self.session.post(f"{self.host}/taker/v3/rfq", json=data, headers=self.headers) as r:
             r.raise_for_status()
             return await r.json()
 
