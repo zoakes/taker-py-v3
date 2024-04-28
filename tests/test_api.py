@@ -11,7 +11,7 @@ TEST_QUOTE_TOKEN_AMOUNT = "18994364991"
 TEST_FEE_BPS = 2
 TEST_MARKET_MAKERS_LIST = ["mm4", "mm5"]
 
-    
+
 def create_response(mocker, json_body):
     response = mocker.MagicMock()
     response.raise_for_status = mocker.MagicMock(return_value=None)
@@ -34,11 +34,12 @@ class TestWallet:
             assert result == TEST_MARKET_MAKERS_LIST
             assert patched.call_args_list == [
                 mocker.call(
-                    "https://api.hashflow.com/taker/v1/marketMakers",
+                    "https://api.hashflow.com/taker/v3/market-makers",
                     headers={"Authorization": TEST_AUTH_KEY},
                     params={
                         "source": "api",
-                        "networkId": TEST_CHAIN_ID,
+                        "baseChainType": 'evm',
+                        "baseChainId": str(TEST_CHAIN_ID),
                         "marketMaker": TEST_MARKET_MAKERS_LIST,
                     },
                 )
@@ -53,14 +54,15 @@ class TestWallet:
             assert result == "dummy data"
             assert patched.call_args_list == [
                 mocker.call(
-                    "https://api.hashflow.com/taker/v2/price-levels",
-                    headers={"Authorization": TEST_AUTH_KEY},
+                    'https://api.hashflow.com/taker/v3/price-levels',
+                    headers={'Authorization': TEST_AUTH_KEY},
                     params={
-                        "source": "api",
-                        "networkId": TEST_CHAIN_ID,
-                        "marketMakers[]": TEST_MARKET_MAKERS_LIST,
-                        "wallet": TEST_WALLET_ADDRESS,
-                    },
+                        'source': 'api',
+                        'baseChainId': '1',
+                        'baseChainType': 'evm',
+                        'marketMakers[]': TEST_MARKET_MAKERS_LIST,
+                        'wallet': TEST_WALLET_ADDRESS
+                    }
                 )
             ]
 
@@ -79,26 +81,26 @@ class TestWallet:
                 debug=True,
             )
             assert result == "quote data"
+            print(patched.call_args_list)
+
             assert patched.call_args_list == [
-                mocker.call(
-                    "https://api.hashflow.com/taker/v2/rfq",
-                    json={
-                        "rfqType": 0,
-                        "source": "api",
-                        "trader": TEST_WALLET_ADDRESS,
-                        "networkId": TEST_CHAIN_ID,
-                        "dstNetworkId": None,
-                        "baseToken": TEST_BASE_TOKEN,
-                        "quoteToken": TEST_QUOTE_TOKEN,
-                        "baseTokenAmount": None,
-                        "quoteTokenAmount": TEST_QUOTE_TOKEN_AMOUNT,
-                        "effectiveTrader": None,
-                        "marketMakers": TEST_MARKET_MAKERS_LIST,
-                        "feesBps": TEST_FEE_BPS,
-                        "debug": True,
-                    },
-                    headers={"Authorization": TEST_AUTH_KEY},
-                )
+                mocker.call('https://api.hashflow.com/taker/v3/rfq',
+                            json={'source': 'api', 'baseChain': {'chainType': 'evm', 'chainId': 1},
+                                  'quoteChain': {'chainType': 'evm', 'chainId': 1}, 'rfqs': [
+                                    {
+                                        'baseToken': TEST_BASE_TOKEN,
+                                        'quoteToken': TEST_QUOTE_TOKEN,
+                                        'baseTokenAmount': None,
+                                        'quoteTokenAmount': TEST_QUOTE_TOKEN_AMOUNT,
+                                        'trader': TEST_WALLET_ADDRESS,
+                                        'effectiveTrader': TEST_WALLET_ADDRESS,
+                                        'marketMakers': ['mm4', 'mm5'],
+                                        'feesBps': TEST_FEE_BPS
+                                    }
+                                ],
+                                  'calldata': True},
+                            headers={'Authorization': 'TH4RngQBV8mgjiZpTHJ3'}
+                            )
             ]
 
 
@@ -112,16 +114,14 @@ class TestTaker:
                 TEST_CHAIN_ID, market_maker=TEST_MARKET_MAKERS_LIST
             )
             assert result == TEST_MARKET_MAKERS_LIST
+
+            print(patched.call_args_list)
             assert patched.call_args_list == [
-                mocker.call(
-                    "https://api.hashflow.com/taker/v1/marketMakers",
-                    headers={"Authorization": TEST_AUTH_KEY},
-                    params={
-                        "source": "test_taker_client",
-                        "networkId": TEST_CHAIN_ID,
-                        "marketMaker": TEST_MARKET_MAKERS_LIST,
-                    },
-                )
+                mocker.call('https://api.hashflow.com/taker/v3/market-makers',
+                            headers={'Authorization': TEST_AUTH_KEY},
+                            params={'source': 'test_taker_client', 'baseChainType': 'evm', 'baseChainId': '1',
+                                    'marketMaker': TEST_MARKET_MAKERS_LIST}
+                            )
             ]
 
     @pytest.mark.asyncio
@@ -131,13 +131,14 @@ class TestTaker:
             patched = mocker.patch.object(aiohttp.ClientSession, "get", return_value=response)
             result = await api.get_price_levels(TEST_CHAIN_ID, market_makers=["mm4", "mm5"])
             assert result == "dummy data"
+            print(patched.call_args_list)
             assert patched.call_args_list == [
                 mocker.call(
-                    "https://api.hashflow.com/taker/v2/price-levels",
+                    "https://api.hashflow.com/taker/v3/price-levels",
                     headers={"Authorization": TEST_AUTH_KEY},
                     params={
                         "source": "test_taker_client",
-                        "networkId": TEST_CHAIN_ID,
+                        'baseChainId': '1', 'baseChainType': 'evm',
                         "marketMakers[]": TEST_MARKET_MAKERS_LIST,
                     },
                 )
@@ -159,24 +160,19 @@ class TestTaker:
                 wallet=TEST_WALLET_ADDRESS,
             )
             assert result == "quote data"
+            print(patched.call_args_list)
             assert patched.call_args_list == [
-                mocker.call(
-                    "https://api.hashflow.com/taker/v2/rfq",
-                    json={
-                        "rfqType": 0,
-                        "source": "test_taker_client",
-                        "trader": TEST_WALLET_ADDRESS,
-                        "networkId": TEST_CHAIN_ID,
-                        "dstNetworkId": None,
-                        "baseToken": TEST_BASE_TOKEN,
-                        "quoteToken": TEST_QUOTE_TOKEN,
-                        "baseTokenAmount": None,
-                        "quoteTokenAmount": TEST_QUOTE_TOKEN_AMOUNT,
-                        "effectiveTrader": None,
-                        "marketMakers": TEST_MARKET_MAKERS_LIST,
-                        "feesBps": TEST_FEE_BPS,
-                        "debug": True,
-                    },
-                    headers={"Authorization": TEST_AUTH_KEY},
-                )
+                mocker.call('https://api.hashflow.com/taker/v3/rfq',
+                            json={'source': 'test_taker_client', 'baseChain': {'chainType': 'evm', 'chainId': 1},
+                                  'quoteChain': {'chainType': 'evm', 'chainId': 1}, 'rfqs': [
+                                    {'baseToken': TEST_BASE_TOKEN,
+                                     'quoteToken': TEST_QUOTE_TOKEN,
+                                     'baseTokenAmount': None,
+                                     'quoteTokenAmount': TEST_QUOTE_TOKEN_AMOUNT,
+                                     'trader': TEST_WALLET_ADDRESS,
+                                     'effectiveTrader': TEST_WALLET_ADDRESS,
+                                     'marketMakers': TEST_MARKET_MAKERS_LIST, 'feesBps': TEST_FEE_BPS}], 'calldata': True},
+                            headers={'Authorization': TEST_AUTH_KEY}
+                            )
             ]
+
