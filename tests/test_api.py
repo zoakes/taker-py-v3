@@ -81,8 +81,6 @@ class TestWallet:
                 debug=True,
             )
             assert result == "quote data"
-            print(patched.call_args_list)
-
             assert patched.call_args_list == [
                 mocker.call('https://api.hashflow.com/taker/v3/rfq',
                             json={'source': 'api', 'baseChain': {'chainType': 'evm', 'chainId': 1},
@@ -114,8 +112,6 @@ class TestTaker:
                 TEST_CHAIN_ID, market_maker=TEST_MARKET_MAKERS_LIST
             )
             assert result == TEST_MARKET_MAKERS_LIST
-
-            print(patched.call_args_list)
             assert patched.call_args_list == [
                 mocker.call('https://api.hashflow.com/taker/v3/market-makers',
                             headers={'Authorization': TEST_AUTH_KEY},
@@ -131,7 +127,6 @@ class TestTaker:
             patched = mocker.patch.object(aiohttp.ClientSession, "get", return_value=response)
             result = await api.get_price_levels(TEST_CHAIN_ID, market_makers=["mm4", "mm5"])
             assert result == "dummy data"
-            print(patched.call_args_list)
             assert patched.call_args_list == [
                 mocker.call(
                     "https://api.hashflow.com/taker/v3/price-levels",
@@ -160,7 +155,6 @@ class TestTaker:
                 wallet=TEST_WALLET_ADDRESS,
             )
             assert result == "quote data"
-            print(patched.call_args_list)
             assert patched.call_args_list == [
                 mocker.call('https://api.hashflow.com/taker/v3/rfq',
                             json={'source': 'test_taker_client', 'baseChain': {'chainType': 'evm', 'chainId': 1},
